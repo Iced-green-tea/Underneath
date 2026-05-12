@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Underneath - Light</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="light.css" />
+  </head>
+  <body>
+    <div class="void"></div>
+    <div class="crumb">
+      <a href="path.html">path</a>
+      <span class="sep">/</span>
+      <span>light</span>
+    </div>
+    <div class="index">UND<b>.</b>REST<b>.</b>03</div>
+
+    <main class="shell">
+      <section class="lightbox" aria-label="light tuning puzzle">
+        <div class="aperture" id="aperture">
+          <span class="beam north"></span>
+          <span class="beam east"></span>
+          <span class="beam west"></span>
+          <span class="threshold" id="threshold"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <span class="ix">REST 03 / LAMP</span>
+        <h1>Tune the light.</h1>
+        <p>
+          Three directions touch the room. When none of them asks to be first,
+          the archive can be seen.
+        </p>
+
+        <div class="controls" id="controls">
+          <label>
+            <span>north</span>
+            <input type="range" min="0" max="100" value="28" data-key="north" />
+          </label>
+          <label>
+            <span>east</span>
+            <input type="range" min="0" max="100" value="76" data-key="east" />
+          </label>
+          <label>
+            <span>west</span>
+            <input type="range" min="0" max="100" value="18" data-key="west" />
+          </label>
+        </div>
+
+        <p class="status" id="lightStatus">let each wall hold only enough brightness</p>
+        <a class="next" id="lightNext" href="Archive.html">enter the archive</a>
+      </section>
+    </main>
+
+    <script src="light.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1016 @@
+/* =========================================================
+   Underneath — stacking puzzle
+   Optimizations applied:
+   · Advanced SAT solver with continuous vertex updates 
+   · Contact manifold averaging for stable polygon stacking
+   · True ground-plane impulse resolution
+   · Real-world inertia tensors and settling damping
+   ========================================================= */
+
+      const cv = document.getElementById("cv");
+      const ctx = cv.getContext("2d");
+      const timerEl = document.getElementById("timer");
+      const fill = document.getElementById("timerFill");
+      const tText = document.getElementById("timerText");
+      const gate = document.getElementById("gate");
+      const resetBtn = document.getElementById("reset");
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      /* ---------- Palette cache ---------- */
+      const P = {};
+      function cachePalette() {
+        const s = getComputedStyle(document.documentElement);
+        P.ink = s.getPropertyValue("--ink").trim();
+        P.muted = s.getPropertyValue("--muted").trim();
+        P.hair = s.getPropertyValue("--hair").trim();
+        P.red = s.getPropertyValue("--red").trim();
+        P.blue = s.getPropertyValue("--blue").trim();
+        P.green = s.getPropertyValue("--green").trim();
+      }
+      function bodyColor(b) {
+        if (b.color === "--green") return P.green;
+        if (b.color === "--blue") return P.blue;
+        if (b.color === "--red") return P.red;
+        return b.color;
+      }
+
+      /* ---------- Stack detection config ---------- */
+      const STACK = {
+        groundTol: 36,
+        ciSqYTol: 52,
+        ciSqXTol: 52,
+        trCiYTol: 56,
+        trCiXTol: 54,
+        restV: 130,
+        restW: 3.2,
+      };
+
+      const SNAP = {
+        baseY: 120,
+        bodyY: 150,
+        bodyX: 120,
+      };
+
+      /* ---------- Viewport ---------- */
+      let W = 0,
+        H = 0,
+        DPR = 1;
+      function resize() {
+        cachePalette();
+        DPR = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth;
+        H = window.innerHeight;
+        cv.width = W * DPR;
+        cv.height = H * DPR;
+        cv.style.width = W + "px";
+        cv.style.height = H + "px";
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        layoutDoor();
+        keepBodiesInView();
+      }
+      window.addEventListener("resize", resize);
+
+      /* ---------- Door ---------- */
+      const door = { x: 0, y: 0, w: 120, h: 280, opening: 0, zoom: 0 };
+      function groundY() {
+        return H - clamp(H * 0.18, 92, 130);
+      }
+      function layoutDoor() {
+        door.w = clamp(W * 0.13, 68, 130);
+        door.h = clamp(H * 0.42, 210, 310);
+        door.x = Math.round(clamp(W * 0.66, 48, W - door.w - 24));
+        door.y = groundY() - door.h;
+      }
+
+      /* ---------- Physics constants ---------- */
+      const G = 1400;
+      const REST = 0.0;
+      const LIN_DAMP = 0.992;
+      const ANG_DAMP = 0.96;
+      const SOLVER_ITERS = 8;
+
+      /* ---------- Bodies ---------- */
+      function makeBody(type, opts) {
+        return Object.assign(
+          {
+            type,
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            a: 0,
+            w: 0,
+            color: "#000",
+            mass: 1,
+            inv: 1,
+            inertia: 1,
+            inI: 1,
+            held: false,
+            onGround: false,
+            sleepFrames: 0,
+            sleeping: false,
+            _v: null,
+          },
+          opts,
+        );
+      }
+
+      function wake(b) {
+        b.sleeping = false;
+        b.sleepFrames = 0;
+      }
+
+      function settle(b) {
+        b.vx = 0;
+        b.vy = 0;
+        b.w = 0;
+        b.sleeping = true;
+        b.sleepFrames = 30;
+        updateVerts(b);
+      }
+
+      let bodies = [];
+      function shapeScale() {
+        return clamp(Math.min(W, H) / 760, 0.68, 1);
+      }
+
+      function buildScene() {
+        bodies = [];
+        const gy = groundY();
+        const s = shapeScale();
+        const xs =
+          W < 620
+            ? [W * 0.26, W * 0.5, W * 0.74]
+            : [W * 0.2, W * 0.36, W * 0.5];
+        const sq = makeBody("square", {
+          color: "--green",
+          x: xs[0],
+          y: gy - 50 * s,
+          hw: 50 * s,
+          hh: 50 * s,
+          mass: 2.0,
+        });
+        const ci = makeBody("circle", {
+          color: "--blue",
+          x: xs[1],
+          y: gy - 44 * s,
+          r: 44 * s,
+          mass: 1.4,
+        });
+        const tr = makeBody("triangle", {
+          color: "--red",
+          x: xs[2],
+          y: gy - 46 * s,
+          R: 54 * s,
+          mass: 1.0,
+        });
+        for (const b of [sq, ci, tr]) {
+          b.inv = 1 / b.mass;
+          // Standard real-world inertia tensors for stability
+          if (b.type === "circle") b.inertia = 0.5 * b.mass * b.r * b.r;
+          else if (b.type === "square")
+            b.inertia = (b.mass * ((2 * b.hw) ** 2 + (2 * b.hh) ** 2)) / 12;
+          else b.inertia = 0.15 * b.mass * b.R * b.R;
+          b.inI = 1 / b.inertia;
+        }
+        bodies.push(sq, ci, tr);
+      }
+
+      /* ---------- Geometry ---------- */
+      function squareVertsRaw(b) {
+        const c = Math.cos(b.a),
+          s = Math.sin(b.a);
+        const px = [-b.hw, b.hw, b.hw, -b.hw],
+          py = [-b.hh, -b.hh, b.hh, b.hh];
+        const out = [];
+        for (let i = 0; i < 4; i++)
+          out.push({
+            x: b.x + px[i] * c - py[i] * s,
+            y: b.y + px[i] * s + py[i] * c,
+          });
+        return out;
+      }
+      function triangleVertsRaw(b) {
+        const c = Math.cos(b.a),
+          s = Math.sin(b.a);
+        return [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6].map((t) => {
+          const lx = Math.cos(t) * b.R,
+            ly = Math.sin(t) * b.R;
+          return { x: b.x + lx * c - ly * s, y: b.y + lx * s + ly * c };
+        });
+      }
+
+      function updateVerts(b) {
+        if (b.type === "square") b._v = squareVertsRaw(b);
+        else if (b.type === "triangle") b._v = triangleVertsRaw(b);
+      }
+
+      function keepBodiesInView() {
+        if (!bodies.length) return;
+        const gy = groundY();
+        for (const b of bodies) {
+          const pad =
+            b.type === "circle"
+              ? b.r
+              : b.type === "square"
+                ? Math.max(b.hw, b.hh)
+                : b.R;
+          b.x = clamp(b.x, pad + 8, W - pad - 8);
+          if (b.y > gy - pad * 0.25) b.y = gy - pad * 0.25;
+          updateVerts(b);
+        }
+      }
+
+      function bodyAABB(b) {
+        if (b.type === "circle")
+          return {
+            minX: b.x - b.r,
+            maxX: b.x + b.r,
+            minY: b.y - b.r,
+            maxY: b.y + b.r,
+          };
+        const v = b._v;
+        let mnx = Infinity,
+          mny = Infinity,
+          mxx = -Infinity,
+          mxy = -Infinity;
+        for (const p of v) {
+          if (p.x < mnx) mnx = p.x;
+          if (p.x > mxx) mxx = p.x;
+          if (p.y < mny) mny = p.y;
+          if (p.y > mxy) mxy = p.y;
+        }
+        return { minX: mnx, maxX: mxx, minY: mny, maxY: mxy };
+      }
+
+      function aabbsOverlap(A, B) {
+        const a = bodyAABB(A),
+          b = bodyAABB(B);
+        return (
+          a.maxX > b.minX &&
+          a.minX < b.maxX &&
+          a.maxY > b.minY &&
+          a.minY < b.maxY
+        );
+      }
+
+      /* ---------- SAT ---------- */
+      function polyAxes(verts) {
+        const a = [];
+        for (let i = 0; i < verts.length; i++) {
+          const p = verts[i],
+            q = verts[(i + 1) % verts.length];
+          const ex = q.x - p.x,
+            ey = q.y - p.y,
+            L = Math.hypot(ex, ey) || 1;
+          a.push({ x: -ey / L, y: ex / L });
+        }
+        return a;
+      }
+      function projectPoly(verts, ax) {
+        let mn = Infinity,
+          mx = -Infinity;
+        for (const v of verts) {
+          const d = v.x * ax.x + v.y * ax.y;
+          if (d < mn) mn = d;
+          if (d > mx) mx = d;
+        }
+        return [mn, mx];
+      }
+
+      function collidePolyPoly(A, B) {
+        const va = A._v,
+          vb = B._v;
+        const axes = [...polyAxes(va), ...polyAxes(vb)];
+        let best = { depth: Infinity, nx: 0, ny: 0 };
+        for (const ax of axes) {
+          const [a1, a2] = projectPoly(va, ax),
+            [b1, b2] = projectPoly(vb, ax);
+          const o = Math.min(a2, b2) - Math.max(a1, b1);
+          if (o <= 0) return null;
+          if (o < best.depth) best = { depth: o, nx: ax.x, ny: ax.y };
+        }
+        const dx = B.x - A.x,
+          dy = B.y - A.y;
+        if (dx * best.nx + dy * best.ny < 0) {
+          best.nx = -best.nx;
+          best.ny = -best.ny;
+        }
+
+        // Average all contact points near the max depth for stability
+        let pA = [],
+          dA = -Infinity;
+        for (const v of va) {
+          const d = v.x * best.nx + v.y * best.ny;
+          if (d > dA + 0.1) {
+            dA = d;
+            pA = [v];
+          } else if (d > dA - 0.1) {
+            pA.push(v);
+            dA = Math.max(dA, d);
+          }
+        }
+        let pB = [],
+          dB = Infinity;
+        for (const v of vb) {
+          const d = v.x * best.nx + v.y * best.ny;
+          if (d < dB - 0.1) {
+            dB = d;
+            pB = [v];
+          } else if (d < dB + 0.1) {
+            pB.push(v);
+            dB = Math.min(dB, d);
+          }
+        }
+        let cx = 0,
+          cy = 0;
+        for (const v of pA) {
+          cx += v.x;
+          cy += v.y;
+        }
+        for (const v of pB) {
+          cx += v.x;
+          cy += v.y;
+        }
+        const count = pA.length + pB.length;
+
+        return {
+          depth: best.depth,
+          nx: best.nx,
+          ny: best.ny,
+          cx: cx / count,
+          cy: cy / count,
+        };
+      }
+
+      function pointInPoly(x, y, verts) {
+        let inside = false;
+        for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+          const xi = verts[i].x,
+            yi = verts[i].y,
+            xj = verts[j].x,
+            yj = verts[j].y;
+          if (
+            yi > y != yj > y &&
+            x < ((xj - xi) * (y - yi)) / (yj - yi || 1e-9) + xi
+          )
+            inside = !inside;
+        }
+        return inside;
+      }
+      function collideCirclePoly(C, P) {
+        const verts = P._v;
+        let best = Infinity,
+          cpx = 0,
+          cpy = 0;
+        for (let i = 0; i < verts.length; i++) {
+          const a = verts[i],
+            b = verts[(i + 1) % verts.length];
+          const ex = b.x - a.x,
+            ey = b.y - a.y;
+          const t = Math.max(
+            0,
+            Math.min(
+              1,
+              ((C.x - a.x) * ex + (C.y - a.y) * ey) / (ex * ex + ey * ey || 1),
+            ),
+          );
+          const px = a.x + ex * t,
+            py = a.y + ey * t;
+          const dd = (C.x - px) ** 2 + (C.y - py) ** 2;
+          if (dd < best) {
+            best = dd;
+            cpx = px;
+            cpy = py;
+          }
+        }
+        const dist = Math.sqrt(best);
+        const inside = pointInPoly(C.x, C.y, verts);
+        if (!inside && dist >= C.r) return null;
+        let nx, ny, depth;
+        if (inside) {
+          nx = C.x - cpx;
+          ny = C.y - cpy;
+          const L = Math.hypot(nx, ny) || 1;
+          nx /= L;
+          ny /= L;
+          depth = C.r + dist;
+        } else {
+          nx = (C.x - cpx) / (dist || 1);
+          ny = (C.y - cpy) / (dist || 1);
+          depth = C.r - dist;
+        }
+        return { depth, nx, ny, cx: cpx, cy: cpy };
+      }
+      function collideCircleCircle(A, B) {
+        const dx = B.x - A.x,
+          dy = B.y - A.y,
+          d = Math.hypot(dx, dy),
+          r = A.r + B.r;
+        if (d >= r) return null;
+        const nx = d ? dx / d : 1,
+          ny = d ? dy / d : 0;
+        return { depth: r - d, nx, ny, cx: A.x + nx * A.r, cy: A.y + ny * A.r };
+      }
+      function collide(A, B) {
+        if (!aabbsOverlap(A, B)) return null;
+        if (A.type === "circle" && B.type === "circle")
+          return collideCircleCircle(A, B);
+        if (A.type === "circle") {
+          const c = collideCirclePoly(A, B);
+          if (!c) return null;
+          return { depth: c.depth, nx: -c.nx, ny: -c.ny, cx: c.cx, cy: c.cy };
+        }
+        if (B.type === "circle") {
+          const c = collideCirclePoly(B, A);
+          if (!c) return null;
+          return { depth: c.depth, nx: c.nx, ny: c.ny, cx: c.cx, cy: c.cy };
+        }
+        return collidePolyPoly(A, B);
+      }
+
+      /* ---------- Resolution ---------- */
+      function resolveStatic(b) {
+        const gy = groundY();
+        let pen = 0;
+        let cx = 0,
+          cy = 0;
+
+        if (b.type === "circle") {
+          pen = b.y + b.r - gy;
+          cx = b.x;
+          cy = b.y + b.r;
+        } else {
+          let p = [],
+            dMax = -Infinity;
+          for (const v of b._v) {
+            const d = v.y - gy;
+            if (d > dMax + 0.1) {
+              dMax = d;
+              p = [v];
+            } else if (d > dMax - 0.1) {
+              p.push(v);
+              dMax = Math.max(dMax, d);
+            }
+          }
+          if (dMax > 0) {
+            pen = dMax;
+            for (const v of p) {
+              cx += v.x;
+              cy += v.y;
+            }
+            cx /= p.length;
+            cy /= p.length;
+          }
+        }
+
+        if (pen > 0) {
+          b.onGround = true;
+          if (!b.held) {
+            b.y -= pen;
+            cy -= pen; // Adjust contact point directly with position
+            updateVerts(b); // Update vertices instantly for stable iter
+
+            const nx = 0,
+              ny = -1;
+            const rax = cx - b.x,
+              ray = cy - b.y;
+            const vax = b.vx - b.w * ray,
+              vay = b.vy + b.w * rax;
+            const vn = vax * nx + vay * ny;
+
+            // Vertical restitution/impulse
+            // Normal n=(0,-1) points from ground UP to body, so the body
+            // is "B-like" relative to the ground; impulse pushes it along +n.
+            if (vn < 0) {
+              const raCN = rax * ny - ray * nx;
+              const denom = b.inv + raCN * raCN * b.inI;
+              const j = (-(1 + REST) * vn) / denom;
+              b.vx += j * nx * b.inv;
+              b.vy += j * ny * b.inv;
+              b.w += j * raCN * b.inI;
+            }
+
+            // Friction against floor
+            const tx = -ny,
+              ty = nx;
+            const vt = vax * tx + vay * ty;
+            const raCT = rax * ty - ray * tx;
+            const denomT = b.inv + raCT * raCT * b.inI;
+            let jt = -vt / denomT;
+
+            const maxFric = Math.abs(vn) * 0.5; // Friction limit
+            if (jt > maxFric) jt = maxFric;
+            if (jt < -maxFric) jt = -maxFric;
+
+            b.vx += jt * tx * b.inv;
+            b.vy += jt * ty * b.inv;
+            b.w += jt * raCT * b.inI;
+          }
+        } else {
+          b.onGround = false;
+        }
+
+        // Wall boundaries
+        if (b.x < 50) {
+          b.x = 50;
+          if (b.vx < 0) b.vx *= -0.5;
+          updateVerts(b);
+        }
+        if (b.x > W - 50) {
+          b.x = W - 50;
+          if (b.vx > 0) b.vx *= -0.5;
+          updateVerts(b);
+        }
+      }
+
+      function resolvePair(A, B, info) {
+        if (!info || info.depth <= 0) return;
+        if (A.sleeping) wake(A);
+        if (B.sleeping) wake(B);
+
+        const { depth, nx, ny, cx, cy } = info;
+        const totalInv = (A.held ? 0 : A.inv) + (B.held ? 0 : B.inv);
+        if (totalInv === 0) return;
+
+        // Positional Correction
+        const corr = (Math.max(depth - 0.5, 0) / totalInv) * 0.6;
+        if (!A.held) {
+          A.x -= nx * corr * A.inv;
+          A.y -= ny * corr * A.inv;
+          updateVerts(A);
+        }
+        if (!B.held) {
+          B.x += nx * corr * B.inv;
+          B.y += ny * corr * B.inv;
+          updateVerts(B);
+        }
+
+        const rax = cx - A.x,
+          ray = cy - A.y,
+          rbx = cx - B.x,
+          rby = cy - B.y;
+        const vax = A.vx - A.w * ray,
+          vay = A.vy + A.w * rax;
+        const vbx = B.vx - B.w * rby,
+          vby = B.vy + B.w * rbx;
+        const rvx = vbx - vax,
+          rvy = vby - vay;
+        const vn = rvx * nx + rvy * ny;
+
+        if (vn > 0) return; // Bodies separating
+
+        // Normal Impulse
+        const raCN = rax * ny - ray * nx,
+          rbCN = rbx * ny - rby * nx;
+        const denom =
+          totalInv +
+          (A.held ? 0 : raCN * raCN * A.inI) +
+          (B.held ? 0 : rbCN * rbCN * B.inI);
+        const j = (-(1 + REST) * vn) / denom;
+
+        if (!A.held) {
+          A.vx -= j * nx * A.inv;
+          A.vy -= j * ny * A.inv;
+          A.w -= j * raCN * A.inI;
+        }
+        if (!B.held) {
+          B.vx += j * nx * B.inv;
+          B.vy += j * ny * B.inv;
+          B.w += j * rbCN * B.inI;
+        }
+
+        // Tangent Friction
+        const tx = -ny,
+          ty = nx;
+        const vt = rvx * tx + rvy * ty;
+        const raCT = rax * ty - ray * tx,
+          rbCT = rbx * ty - rby * tx;
+        const denomT =
+          totalInv +
+          (A.held ? 0 : raCT * raCT * A.inI) +
+          (B.held ? 0 : rbCT * rbCT * B.inI);
+        let jt = -vt / denomT;
+
+        const maxFric = Math.abs(j) * 0.4;
+        if (jt > maxFric) jt = maxFric;
+        if (jt < -maxFric) jt = -maxFric;
+
+        if (!A.held) {
+          A.vx -= jt * tx * A.inv;
+          A.vy -= jt * ty * A.inv;
+          A.w -= jt * raCT * A.inI;
+        }
+        if (!B.held) {
+          B.vx += jt * tx * B.inv;
+          B.vy += jt * ty * B.inv;
+          B.w += jt * rbCT * B.inI;
+        }
+      }
+
+      /* ---------- Drag ---------- */
+      let drag = null;
+      let mouse = { x: 0, y: 0, prev: { x: 0, y: 0 } };
+      function pointInBody(x, y, b) {
+        if (b.type === "circle")
+          return (x - b.x) ** 2 + (y - b.y) ** 2 <= b.r * b.r;
+        return pointInPoly(x, y, b._v);
+      }
+      cv.addEventListener("pointerdown", (e) => {
+        if (won) return;
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        mouse.prev = { x: e.clientX, y: e.clientY };
+        for (let i = bodies.length - 1; i >= 0; i--) {
+          const b = bodies[i];
+          if (pointInBody(mouse.x, mouse.y, b)) {
+            drag = { body: b, ox: b.x - mouse.x, oy: b.y - mouse.y };
+            wake(b);
+            for (const o of bodies) wake(o);
+            b.held = true;
+            b.vx = 0;
+            b.vy = 0;
+            b.w = 0;
+            bodies.splice(i, 1);
+            bodies.push(b);
+            cv.setPointerCapture(e.pointerId);
+            document.body.style.cursor = "grabbing";
+            return;
+          }
+        }
+      });
+      cv.addEventListener("pointermove", (e) => {
+        mouse.prev = { x: mouse.x, y: mouse.y };
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        if (!drag) {
+          let hover = false;
+          for (const b of bodies) {
+            if (pointInBody(mouse.x, mouse.y, b)) {
+              hover = true;
+              break;
+            }
+          }
+          document.body.style.cursor = hover ? "grab" : "default";
+        }
+      });
+
+      function tryAssistDrop(b) {
+        const gy = groundY();
+
+        if (b.type === "square") {
+          const closeToFloor = Math.abs(b.y + b.hh - gy) < SNAP.baseY;
+          if (!closeToFloor) return false;
+          b.x = clamp(b.x, b.hw + 12, W - b.hw - 12);
+          b.y = gy - b.hh;
+          b.a = 0;
+          settle(b);
+          return true;
+        }
+
+        const sq = bodyByType("square");
+        if (!sq) return false;
+        const sqA = bodyAABB(sq);
+
+        if (b.type === "circle") {
+          const targetX = sq.x;
+          const targetY = sqA.minY - b.r;
+          const nearSupport =
+            Math.abs(b.x - targetX) < Math.max(SNAP.bodyX, sq.hw + b.r) &&
+            Math.abs(b.y - targetY) < SNAP.bodyY;
+          if (!nearSupport) return false;
+          b.x = targetX;
+          b.y = targetY;
+          settle(b);
+          return true;
+        }
+
+        const ci = bodyByType("circle");
+        if (!ci) return false;
+        const circleOnSquare =
+          Math.abs(ci.y + ci.r - sqA.minY) < STACK.ciSqYTol + 18 &&
+          Math.abs(ci.x - sq.x) < sq.hw + STACK.ciSqXTol + 12;
+
+        if (b.type === "triangle" && circleOnSquare) {
+          const targetX = ci.x;
+          const targetY = ci.y - ci.r - b.R * 0.5;
+          const nearSupport =
+            Math.abs(b.x - targetX) < Math.max(SNAP.bodyX, ci.r + b.R) &&
+            Math.abs(b.y - targetY) < SNAP.bodyY;
+          if (!nearSupport) return false;
+          b.x = targetX;
+          b.y = targetY;
+          b.a = 0;
+          settle(b);
+          return true;
+        }
+
+        return false;
+      }
+
+      function endDrag(e) {
+        if (!drag) return;
+        if (e) {
+          mouse.prev = { x: mouse.x, y: mouse.y };
+          mouse.x = e.clientX;
+          mouse.y = e.clientY;
+        }
+        const b = drag.body;
+        b.held = false;
+        if (!tryAssistDrop(b)) {
+          b.vx = ((mouse.x - mouse.prev.x) / (1 / 60)) * 0.28;
+          b.vy = ((mouse.y - mouse.prev.y) / (1 / 60)) * 0.28;
+        }
+        drag = null;
+        document.body.style.cursor = "default";
+      }
+      cv.addEventListener("pointerup", endDrag);
+      cv.addEventListener("pointercancel", endDrag);
+
+      /* ---------- Unified step loop ---------- */
+      let lastT = performance.now();
+      let won = false;
+      let winState = null;
+      const DOOR_END = 1.6,
+        ZOOM_START = 1.2,
+        ZOOM_END = 3.4;
+
+      function step(now) {
+        const dt = Math.min(0.033, (now - lastT) / 1000);
+        lastT = now;
+
+        if (drag) {
+          const b = drag.body,
+            tx = mouse.x + drag.ox,
+            ty = mouse.y + drag.oy;
+          b.vx += ((tx - b.x) * 36 - b.vx * 12) * dt;
+          b.vy += ((ty - b.y) * 36 - b.vy * 12) * dt;
+          b.w *= 0.5;
+        }
+
+        for (const b of bodies) {
+          if (b.sleeping) continue;
+          if (!b.held) b.vy += G * dt;
+          b.vx *= LIN_DAMP;
+          b.vy *= LIN_DAMP;
+          b.w *= ANG_DAMP;
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.a += b.w * dt;
+          updateVerts(b);
+        }
+
+        for (let it = 0; it < SOLVER_ITERS; it++) {
+          for (const b of bodies) resolveStatic(b);
+          for (let i = 0; i < bodies.length; i++)
+            for (let j = i + 1; j < bodies.length; j++) {
+              const c = collide(bodies[i], bodies[j]);
+              if (c) resolvePair(bodies[i], bodies[j], c);
+            }
+        }
+
+        /* sleep system */
+        for (const b of bodies) {
+          if (b.held) {
+            wake(b);
+            continue;
+          }
+          if (b.sleeping) continue;
+
+          const v = Math.abs(b.vx) + Math.abs(b.vy);
+
+          // Quick settling damping when very slow to assist entering sleep
+          if (v < 10 && Math.abs(b.w) < 0.5) {
+            b.vx *= 0.9;
+            b.vy *= 0.9;
+            b.w *= 0.9;
+          }
+
+          if (v < 3 && Math.abs(b.w) < 0.15) {
+            b.sleepFrames++;
+            if (b.sleepFrames > 25) {
+              b.sleeping = true;
+              b.vx = 0;
+              b.vy = 0;
+              b.w = 0;
+            }
+          } else {
+            b.sleepFrames = 0;
+          }
+        }
+
+        detectStack(dt);
+
+        if (winState) {
+          const el = (now - winState.t0) / 1000;
+          const dk = Math.min(1, el / DOOR_END);
+          door.opening = 1 - Math.pow(1 - dk, 3);
+          const zRaw = (el - ZOOM_START) / (ZOOM_END - ZOOM_START);
+          door.zoom = Math.max(0, Math.min(1, zRaw));
+          if (el >= ZOOM_END) {
+            door.opening = 1;
+            door.zoom = 1;
+            winState = null;
+            gate.classList.add("on");
+          }
+        }
+
+        draw();
+        requestAnimationFrame(step);
+      }
+
+      /* ---------- Stack detection ---------- */
+      let holdT = 0;
+      const HOLD_TARGET = 5.0;
+      function bodyByType(t) {
+        return bodies.find((b) => b.type === t);
+      }
+      function isStacked() {
+        const sq = bodyByType("square"),
+          ci = bodyByType("circle"),
+          tr = bodyByType("triangle");
+        if (!sq || !ci || !tr) return false;
+        const gy = groundY();
+        const sqA = bodyAABB(sq),
+          trA = bodyAABB(tr);
+        if (Math.abs(sqA.maxY - gy) > STACK.groundTol) return false;
+        if (Math.abs(ci.y + ci.r - sqA.minY) > STACK.ciSqYTol) return false;
+        if (Math.abs(ci.x - sq.x) > sq.hw + STACK.ciSqXTol) return false;
+        if (Math.abs(trA.maxY - (ci.y - ci.r)) > STACK.trCiYTol) return false;
+        if (Math.abs(tr.x - ci.x) > ci.r + STACK.trCiXTol) return false;
+        for (const b of [sq, ci, tr]) {
+          if (b.held) return false;
+          if (Math.abs(b.vx) + Math.abs(b.vy) > STACK.restV) return false;
+          if (Math.abs(b.w) > STACK.restW) return false;
+        }
+        return true;
+      }
+      function detectStack(dt) {
+        if (won) return;
+        if (isStacked()) {
+          holdT += dt;
+          timerEl.classList.add("on");
+          fill.style.width = Math.min(1, holdT / HOLD_TARGET) * 100 + "%";
+          tText.textContent = Math.max(0, HOLD_TARGET - holdT).toFixed(1);
+          if (holdT >= HOLD_TARGET) win();
+        } else if (holdT > 0) {
+          holdT = Math.max(0, holdT - dt * 3);
+          fill.style.width = Math.min(1, holdT / HOLD_TARGET) * 100 + "%";
+          tText.textContent = Math.max(0, HOLD_TARGET - holdT).toFixed(1);
+          if (holdT <= 0.001) timerEl.classList.remove("on");
+        }
+      }
+
+      function win() {
+        won = true;
+        document.body.classList.add("won");
+        winState = { t0: performance.now() };
+      }
+
+      /* ---------- Render ---------- */
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        const dcx = door.x + door.w / 2,
+          dcy = door.y + door.h / 2;
+        let zoomed = false;
+        if (door.zoom > 0) {
+          const ez =
+            door.zoom < 0.5
+              ? 2 * door.zoom * door.zoom
+              : 1 - Math.pow(-2 * door.zoom + 2, 2) / 2;
+          const scale = 1 + ez * 40;
+          ctx.save();
+          ctx.translate(W / 2, H / 2);
+          ctx.scale(scale, scale);
+          ctx.translate(-dcx, -dcy);
+          zoomed = true;
+        }
+        ctx.strokeStyle = P.hair;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, groundY() + 0.5);
+        ctx.lineTo(W, groundY() + 0.5);
+        ctx.stroke();
+        drawDoor();
+        for (const b of bodies) drawBody(b);
+        if (zoomed) ctx.restore();
+      }
+
+      function drawDoor() {
+        const interiorAlpha = Math.min(1, door.opening * 1.4);
+        if (interiorAlpha > 0) {
+          ctx.save();
+          ctx.fillStyle = "#0a0a0a";
+          ctx.globalAlpha = interiorAlpha;
+          ctx.fillRect(door.x, door.y, door.w, door.h);
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(door.x - 2, groundY());
+        ctx.lineTo(door.x - 2, door.y - 2);
+        ctx.lineTo(door.x + door.w + 2, door.y - 2);
+        ctx.lineTo(door.x + door.w + 2, groundY());
+        ctx.stroke();
+        if (door.opening < 0.999) {
+          const open = door.opening;
+          const hingeX = door.x,
+            yTop = door.y,
+            yBot = door.y + door.h;
+          const fw = door.w * (1 - open * 0.85),
+            skewX = open * 36,
+            skewY = open * 20;
+          const xR = hingeX + fw;
+          ctx.save();
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = P.ink;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(hingeX, yTop);
+          ctx.lineTo(xR + skewX, yTop - skewY * 0.2);
+          ctx.lineTo(xR + skewX, yBot + skewY);
+          ctx.lineTo(hingeX, yBot);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(
+            xR + skewX - 6,
+            (yTop + yBot) / 2 + skewY * 0.4,
+            3,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fillStyle = P.ink;
+          ctx.fill();
+          ctx.restore();
+        }
+        if (door.opening < 0.2) {
+          ctx.fillStyle = P.muted;
+          ctx.font = "10px ui-monospace,Menlo,monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("DOOR", door.x + door.w / 2, door.y - 12);
+        }
+      }
+
+      function drawBody(b) {
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = bodyColor(b);
+        ctx.fillStyle = "#fff";
+        if (b.type === "circle") {
+          ctx.translate(b.x, b.y);
+          ctx.rotate(b.a);
+          ctx.beginPath();
+          ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(b.r * 0.55, 0);
+          ctx.globalAlpha = 0.25;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        } else {
+          const v = b._v;
+          ctx.beginPath();
+          ctx.moveTo(v[0].x, v[0].y);
+          for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      /* ---------- Reset ---------- */
+      function reset() {
+        won = false;
+        holdT = 0;
+        door.opening = 0;
+        door.zoom = 0;
+        winState = null;
+        gate.classList.remove("on");
+        document.body.classList.remove("won");
+        timerEl.classList.remove("on");
+        fill.style.width = "0%";
+        tText.textContent = "5.0";
+        buildScene();
+      }
+      resetBtn.addEventListener("click", reset);
+      resetBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      document.getElementById("enter").addEventListener("click", (e) => {
+        e.preventDefault();
+        window.location.href = "path.html";
+      });
+
+      /* ---------- Init ---------- */
+      resize();
+      cachePalette();
+      buildScene();
+      // Initialize vertices before the first frame runs
+      for (const b of bodies) updateVerts(b);
+      requestAnimationFrame(step);
+

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Underneath — Archive</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="archive.css" />
+</head>
+<body>
+<div class="void"></div>
+<div class="scan"></div>
+
+<div class="crumb">
+  <a href="light.html">← light</a>
+  <span class="sep">/</span>
+  <span>archive</span>
+</div>
+<div class="index">UND<b>·</b>ARCH<b>·</b>03</div>
+
+<div class="progress" id="progress">
+  <span id="pcount">0/3</span>
+  <span class="pip" data-i="0"></span>
+  <span class="pip" data-i="1"></span>
+  <span class="pip" data-i="2"></span>
+</div>
+
+<h1 class="heading"><span class="ix">FILE 03 / RECOVERED</span>The Archive</h1>
+<p class="subhead">The place does not remember its visitors. This page keeps a few messages ready while they rest.</p>
+
+<div class="stage">
+  <div class="fragments" id="fragments">
+
+    <article class="frag" data-key="green" style="--accent:#3a8a55;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">01</span>place</div>
+      <div class="body" data-locked="████ ████████ ██ ███ ██████ █████ ████ █████ ██ ████: █████, ███ ███ ████ ████████ ███████" data-unlocked="An old building on the corner keeps four kinds of wall: north, the new wall learning weather; east, the old wall holding its breath; south, the wall of arrivals; west, the wall that lets you leave.">████ ████████ ██ ███ ██████ █████ ████ █████ ██ ████: █████, ███ ███ ████ ████████ ███████</div>
+      <div class="meta"><span>fragment.place</span><span>north.new / east.old</span></div>
+    </article>
+
+    <article class="frag" data-key="blue" style="--accent:#2f6bd8;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">02</span>time</div>
+      <div class="body" data-locked="█████ ██ ██ ███████ ████. ███████, ████████, ████, ██ █████ ███ ████ ████: ███ ████ ██ ████" data-unlocked="There is no correct hour. Morning, midnight, rain, or after the long walk: any time is good if you can stop inside it for a while.">█████ ██ ██ ███████ ████. ███████, ████████, ████, ██ █████ ███ ████ ████: ███ ████ ██ ████</div>
+      <div class="meta"><span>fragment.time</span><span>any hour</span></div>
+    </article>
+
+    <article class="frag" data-key="red" style="--accent:#d94b3a;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">03</span>warning</div>
+      <div class="body" data-locked="████ ████ ███ ████ ███ ██████. █████ ███ ████ ██ ███ █████ ██. ███ █████ ████ ███ █████ █████" data-unlocked="Take only the rest you needed. Leave the room as you found it. The place will not remember your name, but it will keep the quiet ready for the next visitor.">████ ████ ███ ████ ███ ██████. █████ ███ ████ ██ ███ █████ ██. ███ █████ ████ ███ █████ █████</div>
+      <div class="meta"><span>fragment.care</span><span>leave gently</span></div>
+    </article>
+
+  </div>
+</div>
+
+<div class="tray-label">drag a key onto the matching fragment</div>
+<div class="tray" id="tray">
+  <div class="key" draggable="false" data-color="green" style="--clr:#3a8a55;" id="key-green">
+    <svg viewBox="0 0 64 64"><rect class="stroke" x="10" y="10" width="44" height="44"/></svg>
+  </div>
+  <div class="key" draggable="false" data-color="blue" style="--clr:#2f6bd8;" id="key-blue">
+    <svg viewBox="0 0 64 64"><circle class="stroke" cx="32" cy="32" r="22"/></svg>
+  </div>
+  <div class="key" draggable="false" data-color="red" style="--clr:#d94b3a;" id="key-red">
+    <svg viewBox="0 0 64 64"><polygon class="stroke" points="32,9 56,52 8,52"/></svg>
+  </div>
+</div>
+
+<div class="brand">UNDERNEATH · ARCHIVE · 2026</div>
+
+<div class="synthesis" id="synthesis">
+  <div class="label">SYNTHESIS — all keys consumed</div>
+  <h2>An old building on the corner does not remember its visitors. It remembers how to make room: a path to follow, a light to tune, a quiet to leave behind for whoever arrives next.</h2>
+  <div class="coords">
+    <span>PLACE<b>corner</b></span>
+    <span>TIME<b>any hour</b></span>
+    <span>STATE<b>resting</b></span>
+    <span>CARE<b>leave gently</b></span>
+  </div>
+  <div class="actions">
+    <a href="index.html" class="ghost">return</a>
+    <a href="#" id="seal">seal the archive</a>
+  </div>
+</div>
+<script src="archive.js"></script>
+</body>
+</html>
+
