@@ -204,6 +204,11 @@
     display:flex;gap:32px;margin-bottom:48px;
   }
   .synthesis .coords span b{color:var(--ink);font-weight:400;display:block;font-size:18px;letter-spacing:.1em;margin-top:4px;}
+  .synthesis .coords b{
+    user-select:text;
+    -webkit-user-select:text;
+    -webkit-touch-callout:default;
+  }
   .synthesis .actions{
     display:flex;gap:16px;
   }
