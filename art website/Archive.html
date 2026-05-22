@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Underneath — Archive</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --ink:#fff;
+    --muted:#666;
+    --hair:#1a1a1a;
+    --line:#2a2a2a;
+    --red:#d94b3a;
+    --blue:#2f6bd8;
+    --green:#3a8a55;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--ink);
+    font-family:"Inter",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+    overflow:hidden;user-select:none;-webkit-user-select:none;}
+
+  /* faint dot grid texture for the void */
+  .void{
+    position:fixed;inset:0;
+    background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
+    background-size:32px 32px;
+    pointer-events:none;
+  }
+
+  /* top label strip */
+  .crumb{
+    position:fixed;top:24px;left:32px;
+    font-size:10px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .crumb a{color:var(--muted);text-decoration:none;border-bottom:1px solid transparent;transition:color .25s,border-color .25s;}
+  .crumb a:hover{color:var(--ink);border-color:var(--ink);}
+  .crumb .sep{margin:0 12px;color:#333;}
+
+  .index{
+    position:fixed;top:24px;right:32px;
+    font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    font-size:10px;letter-spacing:.2em;color:var(--muted);
+  }
+  .index b{color:var(--ink);font-weight:400;}
+
+  /* page title */
+  .heading{
+    position:fixed;top:64px;left:32px;
+    font-family:"Fraunces","Times New Roman",serif;
+    font-weight:300;font-size:48px;letter-spacing:-.02em;line-height:1;
+    color:var(--ink);
+  }
+  .heading .ix{font-size:14px;letter-spacing:.2em;color:var(--muted);display:block;font-family:inherit;font-weight:400;margin-bottom:10px;}
+  .subhead{
+    position:fixed;top:160px;left:32px;
+    max-width:380px;
+    font-size:13px;line-height:1.6;color:#888;
+    font-family:"Fraunces",serif;font-style:italic;font-weight:300;
+  }
+
+  /* fragments grid — three locked cards floating in space */
+  .stage{
+    position:fixed;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    pointer-events:none;
+  }
+  .fragments{
+    display:flex;gap:40px;align-items:stretch;
+    transition:transform 1.2s cubic-bezier(.7,0,.2,1), opacity .8s;
+  }
+  .frag{
+    width:280px;min-height:340px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,0.015);
+    padding:24px;
+    position:relative;
+    pointer-events:auto;
+    transition:border-color .5s ease, background-color .5s ease, transform .8s cubic-bezier(.7,0,.2,1);
+    display:flex;flex-direction:column;
+    backdrop-filter:blur(2px);
+  }
+  .frag.drag-over{border-color:#444;background:rgba(255,255,255,0.04);}
+  .frag.drag-over.match{border-color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.07);}
+  .frag.drag-over.miss{border-color:#3a1818;background:rgba(217,75,58,0.05);}
+  .frag.unlocked{border-color:#444;background:rgba(255,255,255,0.025);}
+
+  /* gentle bobbing motion on each fragment, staggered */
+  @keyframes bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  .frag:nth-child(1){animation:bob 7s ease-in-out infinite;}
+  .frag:nth-child(2){animation:bob 8.5s ease-in-out -2s infinite;}
+  .frag:nth-child(3){animation:bob 6.2s ease-in-out -4s infinite;}
+  .fragments.assembled .frag{animation:none;}
+
+  .frag .lockmark{
+    position:absolute;top:14px;right:14px;
+    font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.2em;
+    color:var(--muted);text-transform:uppercase;
+    display:flex;align-items:center;gap:6px;
+  }
+  .frag .lockmark::before{
+    content:"";width:6px;height:6px;border:1px solid currentColor;border-radius:50%;
+    background:transparent;transition:background .4s;
+  }
+  .frag.unlocked .lockmark{color:#aaa;}
+  .frag.unlocked .lockmark::before{background:currentColor;}
+
+  .frag .header{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px;letter-spacing:.25em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:auto;
+  }
+  .frag .header .num{color:#444;margin-right:10px;}
+
+  .frag .body{
+    margin:32px 0 12px;
+    font-family:"Fraunces",serif;font-weight:300;font-size:22px;line-height:1.4;
+    color:#444;
+    transition:color .8s ease;
+    min-height:120px;
+    word-break:break-word;
+  }
+  .frag.unlocked .body{color:var(--ink);}
+
+  .frag .meta{
+    font-family:"JetBrains Mono",monospace;
+    font-size:9px;letter-spacing:.2em;color:#333;
+    margin-top:auto;padding-top:12px;border-top:1px solid var(--line);
+    transition:color .8s, border-color .5s;
+    display:flex;justify-content:space-between;
+  }
+  .frag.unlocked .meta{color:#888;border-top-color:#333;}
+
+  /* color accent strip on left edge of each fragment */
+  .frag::before{
+    content:"";position:absolute;left:-1px;top:24px;bottom:24px;width:2px;
+    background:var(--accent,#222);
+    transition:opacity .4s;opacity:0.4;
+  }
+  .frag.unlocked::before{opacity:1;}
+
+  /* shapes tray — bottom of screen, draggable */
+  .tray{
+    position:fixed;bottom:48px;left:50%;transform:translateX(-50%);
+    display:flex;gap:48px;align-items:center;
+    z-index:30;
+  }
+  .tray-label{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+    font-family:"JetBrains Mono",monospace;
+    font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:#444;
+    pointer-events:none;
+  }
+  .key{
+    width:64px;height:64px;
+    cursor:grab;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .2s ease, opacity .4s ease;
+    touch-action:none;
+  }
+  .key:active{cursor:grabbing;transform:scale(1.08);}
+  .key.dragging{position:fixed;z-index:50;pointer-events:none;transform:scale(1.1);}
+  .key.spent{opacity:0.18;cursor:not-allowed;pointer-events:none;}
+  .key svg{width:100%;height:100%;display:block;}
+  .key svg .stroke{stroke:var(--clr);stroke-width:2;fill:transparent;transition:filter .3s;}
+  .key:hover svg .stroke{filter:drop-shadow(0 0 8px var(--clr));}
+
+  /* progress rail — small bar showing 0/3, 1/3, etc */
+  .progress{
+    position:fixed;top:24px;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;align-items:center;
+    font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.3em;color:var(--muted);
+  }
+  .progress .pip{width:24px;height:1px;background:#222;transition:background .5s;}
+  .progress .pip.on{background:var(--ink);}
+
+  /* footer brand */
+  .brand{
+    position:fixed;bottom:48px;right:32px;
+    font-family:"JetBrains Mono",monospace;
+    font-size:9px;letter-spacing:.3em;color:#333;text-transform:uppercase;
+  }
+
+  /* synthesis overlay — appears after all 3 unlocked */
+  .synthesis{
+    position:fixed;inset:0;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    background:radial-gradient(ellipse at center, rgba(10,10,10,0.92) 0%, rgba(10,10,10,1) 70%);
+    opacity:0;pointer-events:none;
+    transition:opacity 1.6s ease;
+    z-index:80;
+    padding:32px;
+  }
+  .synthesis.on{opacity:1;pointer-events:auto;}
+  .synthesis .label{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px;letter-spacing:.4em;color:#666;text-transform:uppercase;
+    margin-bottom:32px;
+  }
+  .synthesis h2{
+    font-family:"Fraunces",serif;font-weight:300;font-style:italic;
+    font-size:42px;line-height:1.3;letter-spacing:-.01em;
+    color:var(--ink);text-align:center;
+    max-width:780px;margin-bottom:48px;
+    text-wrap:pretty;
+  }
+  .synthesis .coords{
+    font-family:"JetBrains Mono",monospace;
+    font-size:13px;letter-spacing:.2em;color:#aaa;
+    display:flex;gap:32px;margin-bottom:48px;
+  }
+  .synthesis .coords span b{color:var(--ink);font-weight:400;display:block;font-size:18px;letter-spacing:.1em;margin-top:4px;}
+  .synthesis .actions{
+    display:flex;gap:16px;
+  }
+  .synthesis .actions a{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--ink);padding:14px 28px;border:1px solid #444;text-decoration:none;
+    transition:background .25s, color .25s, border-color .25s;
+  }
+  .synthesis .actions a:hover{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+  .synthesis .actions a.ghost{color:#888;border-color:#222;}
+  .synthesis .actions a.ghost:hover{color:var(--ink);border-color:#444;background:transparent;}
+
+  /* tiny scanlines on the void for a recovered-archive feel */
+  .scan{
+    position:fixed;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,0.012) 3px,rgba(255,255,255,0.012) 4px);
+    z-index:1;
+  }
+</style>
+</head>
+<body>
+<div class="void"></div>
+<div class="scan"></div>
+
+<div class="crumb">
+  <a href="Underneath.html">← underneath</a>
+  <span class="sep">/</span>
+  <span>archive</span>
+</div>
+<div class="index">UND<b>·</b>ARCH<b>·</b>03</div>
+
+<div class="progress" id="progress">
+  <span id="pcount">0/3</span>
+  <span class="pip" data-i="0"></span>
+  <span class="pip" data-i="1"></span>
+  <span class="pip" data-i="2"></span>
+</div>
+
+<h1 class="heading"><span class="ix">FILE 03 / RECOVERED</span>The Archive</h1>
+<p class="subhead">Three fragments. Three keys. Hold what you brought against what you find. The shape that fits unlocks the line.</p>
+
+<div class="stage">
+  <div class="fragments" id="fragments">
+
+    <article class="frag" data-key="green" style="--accent:#3a8a55;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">01</span>place</div>
+      <div class="body" data-locked="█████ █████ ████, ██████ ████, ████ ██████ — █████████████ ██████████" data-unlocked="A building on the corner. Nine floors above ground. A tenth, beneath, that is not on any blueprint.">█████ █████ ████, ██████ ████, ████ ██████ — █████████████ ██████████</div>
+      <div class="meta"><span>fragment.green</span><span>49.282° N</span></div>
+    </article>
+
+    <article class="frag" data-key="blue" style="--accent:#2f6bd8;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">02</span>time</div>
+      <div class="body" data-locked="█████ █████████ ██:██ ████ ████ ██████ █████ ██████ — ██ ██ ██████" data-unlocked="It always happens at 03:14. The same hour, every cycle. We learned not to be there.">█████ █████████ ██:██ ████ ████ ██████ █████ ██████ — ██ ██ ██████</div>
+      <div class="meta"><span>fragment.blue</span><span>03:14:00</span></div>
+    </article>
+
+    <article class="frag" data-key="red" style="--accent:#d94b3a;">
+      <span class="lockmark">sealed</span>
+      <div class="header"><span class="num">03</span>warning</div>
+      <div class="body" data-locked="████ ████ ████ ██████ ███████ █████ ████ ██ ████ ████ ████ ██ █████" data-unlocked="Take only what you brought. Leave what you find. The room remembers, even when you do not.">████ ████ ████ ██████ ███████ █████ ████ ██ ████ ████ ████ ██ █████</div>
+      <div class="meta"><span>fragment.red</span><span>do not follow</span></div>
+    </article>
+
+  </div>
+</div>
+
+<div class="tray-label">drag a key onto the matching fragment</div>
+<div class="tray" id="tray">
+  <div class="key" draggable="false" data-color="green" style="--clr:#3a8a55;" id="key-green">
+    <svg viewBox="0 0 64 64"><rect class="stroke" x="10" y="10" width="44" height="44"/></svg>
+  </div>
+  <div class="key" draggable="false" data-color="blue" style="--clr:#2f6bd8;" id="key-blue">
+    <svg viewBox="0 0 64 64"><circle class="stroke" cx="32" cy="32" r="22"/></svg>
+  </div>
+  <div class="key" draggable="false" data-color="red" style="--clr:#d94b3a;" id="key-red">
+    <svg viewBox="0 0 64 64"><polygon class="stroke" points="32,9 56,52 8,52"/></svg>
+  </div>
+</div>
+
+<div class="brand">UNDERNEATH · ARCHIVE · 2026</div>
+
+<div class="synthesis" id="synthesis">
+  <div class="label">SYNTHESIS — all keys consumed</div>
+  <h2>A building on the corner. Nine floors above ground, one beneath. It always happens at 03:14. We will be there. We will leave what we find.</h2>
+  <div class="coords">
+    <span>LAT<b>49.282° N</b></span>
+    <span>LON<b>123.120° W</b></span>
+    <span>DATE<b>07.05.2026</b></span>
+    <span>HOUR<b>03:14</b></span>
+  </div>
+  <div class="actions">
+    <a href="Underneath.html" class="ghost">return</a>
+    <a href="#" id="seal">seal the archive</a>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   The Archive — Path 03
+   Each shape (key) unlocks the fragment with the matching
+   color. Three unlocked → synthesis overlay reveals the
+   complete recovered passage with coordinates and time.
+   Drag is custom (not HTML5 native) for full control.
+   ========================================================= */
+
+const tray   = document.getElementById('tray');
+const frags  = document.querySelectorAll('.frag');
+const fragWrap = document.getElementById('fragments');
+const synth  = document.getElementById('synthesis');
+const pcount = document.getElementById('pcount');
+const pips   = document.querySelectorAll('.progress .pip');
+
+let unlocked = new Set();
+let drag = null; // {el, startX, startY, originRect}
+
+/* ---------- Drag system ---------- */
+function startDrag(keyEl, e){
+  if(keyEl.classList.contains('spent')) return;
+  e.preventDefault();
+  const rect = keyEl.getBoundingClientRect();
+  const ghost = keyEl.cloneNode(true);
+  ghost.classList.add('dragging');
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top  = rect.top  + 'px';
+  ghost.style.width = rect.width + 'px';
+  ghost.style.height = rect.height + 'px';
+  document.body.appendChild(ghost);
+  keyEl.style.opacity = 0.25;
+  drag = {
+    keyEl, ghost,
+    color: keyEl.dataset.color,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    targetFrag: null
+  };
+  document.body.style.cursor = 'grabbing';
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', endDrag);
+}
+
+function onMove(e){
+  if(!drag) return;
+  drag.ghost.style.left = (e.clientX - drag.offsetX) + 'px';
+  drag.ghost.style.top  = (e.clientY - drag.offsetY) + 'px';
+  // hit-test against fragments
+  let over = null;
+  for(const f of frags){
+    if(f.classList.contains('unlocked')) continue;
+    const r = f.getBoundingClientRect();
+    if(e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom){
+      over = f; break;
+    }
+  }
+  for(const f of frags){
+    f.classList.remove('drag-over','match','miss');
+  }
+  if(over){
+    over.classList.add('drag-over');
+    if(over.dataset.key === drag.color) over.classList.add('match');
+    else over.classList.add('miss');
+  }
+  drag.targetFrag = over;
+}
+
+function endDrag(e){
+  if(!drag) return;
+  const { keyEl, ghost, color, targetFrag } = drag;
+  window.removeEventListener('pointermove', onMove);
+  window.removeEventListener('pointerup', endDrag);
+  document.body.style.cursor = '';
+
+  // animate ghost back, then remove
+  if(targetFrag && targetFrag.dataset.key === color){
+    // success — burst and remove ghost
+    ghost.style.transition = 'opacity .35s ease, transform .35s ease';
+    ghost.style.opacity = 0;
+    ghost.style.transform = 'scale(1.6)';
+    setTimeout(()=>ghost.remove(), 380);
+    unlock(targetFrag);
+    keyEl.classList.add('spent');
+    keyEl.style.opacity = '';
+  } else {
+    // fail — snap back
+    const back = keyEl.getBoundingClientRect();
+    ghost.style.transition = 'left .35s cubic-bezier(.5,0,.2,1), top .35s cubic-bezier(.5,0,.2,1), opacity .25s';
+    ghost.style.left = back.left + 'px';
+    ghost.style.top  = back.top  + 'px';
+    setTimeout(()=>{ ghost.remove(); keyEl.style.opacity = ''; }, 380);
+    if(targetFrag){
+      // small shake on miss
+      targetFrag.animate(
+        [{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],
+        {duration:280, easing:'ease-out'}
+      );
+    }
+  }
+  for(const f of frags) f.classList.remove('drag-over','match','miss');
+  drag = null;
+}
+
+document.querySelectorAll('.key').forEach(k=>{
+  k.addEventListener('pointerdown', e => startDrag(k, e));
+});
+
+/* ---------- Unlock logic ---------- */
+function unlock(frag){
+  frag.classList.add('unlocked');
+  frag.querySelector('.lockmark').textContent = 'recovered';
+  // type-out animation: locked text → unlocked text
+  const body = frag.querySelector('.body');
+  const target = body.dataset.unlocked;
+  const locked = body.dataset.locked;
+  // glitch transition: 12 frames of random char swap, then resolve to target
+  const glyphs = '█▓▒░╳╳/\\\\<>?#@';
+  let frames = 0;
+  const total = 18;
+  body.style.fontFamily = '"JetBrains Mono",monospace';
+  body.style.fontSize = '14px';
+  body.style.letterSpacing = '.05em';
+  body.style.color = '#888';
+  const tick = () => {
+    frames++;
+    if(frames >= total){
+      // resolve
+      body.style.transition = 'all .8s ease';
+      body.style.fontFamily = '';
+      body.style.fontSize = '';
+      body.style.letterSpacing = '';
+      body.style.color = '';
+      body.textContent = target;
+      return;
+    }
+    let s = '';
+    const reveal = Math.floor((frames/total) * target.length);
+    for(let i=0;i<target.length;i++){
+      if(i < reveal && target[i]!==' ') s += target[i];
+      else if(target[i]===' ') s += ' ';
+      else s += glyphs[Math.floor(Math.random()*glyphs.length)];
+    }
+    body.textContent = s;
+    setTimeout(tick, 60);
+  };
+  tick();
+
+  unlocked.add(frag.dataset.key);
+  pcount.textContent = `${unlocked.size}/3`;
+  pips.forEach((p, i) => { if(i < unlocked.size) p.classList.add('on'); });
+
+  if(unlocked.size === 3){
+    setTimeout(()=>{
+      fragWrap.classList.add('assembled');
+      // pull fragments slightly together
+      fragWrap.style.gap = '8px';
+      fragWrap.style.transform = 'scale(0.92)';
+      fragWrap.style.opacity = '0.4';
+      setTimeout(()=> synth.classList.add('on'), 1200);
+    }, 1400);
+  }
+}
+
+document.getElementById('seal').addEventListener('click', e=>{
+  e.preventDefault();
+  // Final state: fade everything to pure black with a single line
+  document.body.style.transition = 'background 1.2s ease';
+  document.body.style.background = '#000';
+  synth.style.transition = 'opacity 1.2s ease';
+  synth.innerHTML = '<div style="font-family:Fraunces,serif;font-style:italic;font-weight:300;font-size:32px;color:#888;text-align:center;text-wrap:pretty;max-width:560px;">The archive is sealed.<br>You held the key for five seconds.<br>Now you remember.</div>';
+});
+</script>
+</body>
+</html>

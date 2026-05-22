@@ -1,0 +1,270 @@
+:root {
+  --bg: #fff;
+  --ink: #111;
+  --muted: #8c8c8c;
+  --hair: #e7e7e7;
+  --line: #d8d8d8;
+  --blue: #2f6bd8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.crumb,
+.index,
+.brand {
+  position: fixed;
+  z-index: 10;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crumb {
+  top: 24px;
+  left: 32px;
+}
+
+.crumb a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.crumb a:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.crumb .sep {
+  margin: 0 12px;
+  color: #cfcfcf;
+}
+
+.index {
+  top: 24px;
+  right: 32px;
+}
+
+.index b {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(380px, 720px);
+  align-items: center;
+  justify-content: center;
+  gap: clamp(40px, 8vw, 96px);
+  padding: 96px 48px 72px;
+}
+
+.copy .ix {
+  display: block;
+  margin-bottom: 16px;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.copy h1 {
+  margin: 0;
+  font-family: "Fraunces", "Times New Roman", serif;
+  font-size: clamp(44px, 6vw, 72px);
+  font-weight: 300;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.copy p {
+  margin: 28px 0 0;
+  max-width: 340px;
+  color: #777;
+  font-family: "Fraunces", "Times New Roman", serif;
+  font-size: 17px;
+  font-style: normal;
+  font-weight: 300;
+  line-height: 1.65;
+}
+
+.plan {
+  width: min(100%, 760px);
+}
+
+.floor {
+  width: 100%;
+  aspect-ratio: 720 / 440;
+  display: block;
+  border: 1px solid var(--hair);
+  background:
+    linear-gradient(var(--hair) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hair) 1px, transparent 1px),
+    #fff;
+  background-size: 48px 48px;
+  touch-action: none;
+}
+
+.room {
+  fill: rgba(255, 255, 255, 0.72);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.wall-gap {
+  stroke: #fff;
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.guide {
+  fill: none;
+  stroke: #cfd9ef;
+  stroke-width: 34;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.drawn {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.95;
+}
+
+.start,
+.end {
+  fill: #fff;
+  stroke: var(--blue);
+  stroke-width: 2;
+}
+
+.traveler {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 2;
+  filter: drop-shadow(0 8px 18px rgba(17, 17, 17, 0.08));
+  cursor: grab;
+}
+
+.floor.dragging .traveler {
+  cursor: grabbing;
+}
+
+.rail {
+  width: 100%;
+  height: 1px;
+  margin: 24px 0 0;
+  background: var(--hair);
+}
+
+.rail i {
+  display: block;
+  width: 0%;
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.18s linear;
+}
+
+.status {
+  min-height: 20px;
+  margin: 14px 0 0;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.next {
+  display: inline-flex;
+  margin-top: 28px;
+  padding: 14px 28px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  text-decoration: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease, background 0.25s ease, color 0.25s ease;
+}
+
+.next.on {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.next:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+@media (max-width: 920px) {
+  .crumb {
+    top: 16px;
+    left: 18px;
+  }
+
+  .index {
+    top: 16px;
+    right: 18px;
+  }
+
+  .shell {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    gap: 36px;
+    padding: 94px 18px 56px;
+  }
+
+  .copy p {
+    max-width: 520px;
+  }
+
+  .plan {
+    width: 100%;
+  }
+
+  .floor {
+    aspect-ratio: 1 / 1;
+  }
+
+  .status {
+    line-height: 1.5;
+  }
+
+  .next {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 18px;
+  }
+}

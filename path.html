@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Underneath - Path</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="transitions.css" />
+    <link rel="stylesheet" href="path.css" />
+  </head>
+  <body>
+    <div class="crumb">
+      <a href="index.html">underneath</a>
+      <span class="sep">/</span>
+      <span>path</span>
+    </div>
+    <div class="index">UND<b>.</b>REST<b>.</b>02</div>
+    <div class="credit">Noah Lu</div>
+
+    <main class="shell">
+      <section class="copy">
+        <span class="ix">REST 02 / FLOOR</span>
+        <h1>Trace the passage.</h1>
+      </section>
+
+      <section class="plan" aria-label="floor path puzzle">
+        <svg class="floor" viewBox="0 0 720 440" role="img" aria-label="a simple floorplan with a soft path">
+          <rect class="room room-a" x="72" y="72" width="210" height="130" />
+          <rect class="room room-b" x="304" y="72" width="178" height="130" />
+          <rect class="room room-c" x="504" y="72" width="144" height="286" />
+          <rect class="room room-d" x="72" y="228" width="410" height="130" />
+          <line class="wall-gap" x1="282" y1="137" x2="304" y2="137" />
+          <line class="wall-gap" x1="482" y1="137" x2="504" y2="137" />
+          <line class="wall-gap" x1="272" y1="228" x2="272" y2="202" />
+          <path id="pathGuide" class="guide" d="M 112 292 C 178 246, 224 250, 274 286 S 374 334, 430 286 C 486 238, 498 176, 552 143 C 586 122, 616 120, 636 124" />
+          <path id="pathDrawn" class="drawn" d="M 112 292 C 178 246, 224 250, 274 286 S 374 334, 430 286 C 486 238, 498 176, 552 143 C 586 122, 616 120, 636 124" />
+          <circle class="start" cx="112" cy="292" r="8" />
+          <circle class="end" cx="636" cy="124" r="8" />
+          <circle id="traveler" class="traveler" cx="112" cy="292" r="18" />
+        </svg>
+        <div class="rail" aria-hidden="true"><i id="pathFill"></i></div>
+        <p class="status" id="pathStatus">pass 1 of 3</p>
+        <a class="next" id="pathNext" href="light.html">find the light</a>
+      </section>
+    </main>
+
+    <script src="transitions.js"></script>
+    <script src="path.js"></script>
+  </body>
+</html>

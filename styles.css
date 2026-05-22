@@ -1,0 +1,224 @@
+:root {
+        --ink: #111;
+        --muted: #9a9a9a;
+        --hair: #e9e9e9;
+        --red: #d94b3a;
+        --blue: #2f6bd8;
+        --green: #3a8a55;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #fff;
+        font-family:
+          "Inter",
+          system-ui,
+          -apple-system,
+          "Helvetica Neue",
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+      body {
+        overflow: hidden;
+        cursor: default;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      canvas {
+        position: fixed;
+        inset: 0;
+        display: block;
+        touch-action: none;
+      }
+
+      .hint {
+        position: fixed;
+        top: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        pointer-events: none;
+        transition: opacity 0.6s ease;
+      }
+      .timer {
+        position: fixed;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%) translateY(8px);
+        font-family:
+          "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--ink);
+        opacity: 0;
+        transition:
+          opacity 0.35s ease,
+          transform 0.35s ease;
+        pointer-events: none;
+        text-align: center;
+      }
+      .timer.on {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .timer .bar {
+        width: 200px;
+        height: 1px;
+        background: var(--hair);
+        margin: 10px auto 0;
+        position: relative;
+      }
+      .timer .bar i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 0%;
+        background: var(--ink);
+        transition: width 0.12s linear;
+      }
+      .timer .label {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 9px;
+        letter-spacing: 0.3em;
+      }
+
+      .reset {
+        position: fixed;
+        top: 24px;
+        right: 28px;
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--muted);
+        background: none;
+        border: none;
+        padding: 8px 10px;
+        cursor: pointer;
+        transition:
+          color 0.2s ease,
+          opacity 0.6s ease;
+        z-index: 20;
+      }
+      .reset:hover {
+        color: var(--ink);
+      }
+
+      .gate {
+        position: fixed;
+        inset: 0;
+        background: #0a0a0a;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.8s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        z-index: 60;
+        color: #fff;
+      }
+      .gate.on {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .gate h1 {
+        font-family: "Fraunces", "Times New Roman", serif;
+        font-weight: 300;
+        font-size: 64px;
+        letter-spacing: -0.02em;
+        margin: 0 0 24px;
+        color: #fff;
+      }
+      .gate p {
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #666;
+        margin: 0 0 48px;
+      }
+      .gate a {
+        font-size: 11px;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: #fff;
+        border: 1px solid #fff;
+        padding: 14px 32px;
+        text-decoration: none;
+        transition:
+          background 0.25s ease,
+          color 0.25s ease;
+      }
+      .gate a:hover {
+        background: #fff;
+        color: #0a0a0a;
+      }
+
+      .brand {
+        position: fixed;
+        bottom: 28px;
+        left: 32px;
+        font-size: 10px;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: var(--muted);
+        pointer-events: none;
+        transition: opacity 0.6s ease;
+      }
+
+      /* CSS handles all the UI fade-out on win — no JS inline styles needed */
+      body.won .hint,
+      body.won .reset,
+      body.won .brand,
+      body.won .timer {
+        opacity: 0 !important;
+        pointer-events: none;
+      }
+
+      @media (max-width: 700px) {
+        .hint {
+          top: 18px;
+          width: min(84vw, 360px);
+          text-align: center;
+          line-height: 1.5;
+        }
+        .reset {
+          top: 12px;
+          right: 12px;
+          padding: 12px;
+        }
+        .brand {
+          left: 18px;
+          bottom: 18px;
+        }
+        .timer {
+          bottom: 24px;
+          width: min(80vw, 260px);
+        }
+        .timer .bar {
+          width: 100%;
+        }
+        .gate {
+          padding: 28px;
+          text-align: center;
+        }
+        .gate h1 {
+          font-size: clamp(42px, 14vw, 64px);
+        }
+        .gate a {
+          width: min(100%, 280px);
+          padding-inline: 18px;
+        }
+      }
+

@@ -1,0 +1,57 @@
+html {
+  background: #fff;
+}
+
+body {
+  animation: pageFadeIn 0.42s ease both;
+}
+
+body.page-exit {
+  animation: pageFadeOut 0.24s ease both;
+}
+
+.credit {
+  position: fixed;
+  right: 32px;
+  bottom: 28px;
+  z-index: 30;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+  pointer-events: none;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pageFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  body.page-exit {
+    animation: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .credit {
+    right: 18px;
+    bottom: 18px;
+    font-size: 9px;
+  }
+}
