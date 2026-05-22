@@ -121,7 +121,7 @@ let DPR = 1;
 
 function resize() {
   cachePalette();
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
   W = window.innerWidth;
   H = window.innerHeight;
   cv.width = W * DPR;
@@ -520,7 +520,7 @@ function step(now) {
 
 function softenTinyMotion() {
   for (const b of bodies) {
-    if (b === dragging || b.plugin.snap || b.isSleeping) continue;
+    if (b === dragging?.body || b.plugin.snap || b.isSleeping) continue;
     if (b.speed < 0.15 && b.angularSpeed < 0.01) {
       Body.setVelocity(b, { x: b.velocity.x * 0.75, y: b.velocity.y * 0.75 });
       Body.setAngularVelocity(b, b.angularVelocity * 0.72);
@@ -553,7 +553,7 @@ function isStacked() {
   if (Math.abs(tr.position.x - ci.position.x) > ci.plugin.r + STACK.trCiXTol) return false;
 
   for (const b of [sq, ci, tr]) {
-    if (b === dragging || b.plugin.snap) return false;
+    if (b === dragging?.body || b.plugin.snap) return false;
     if (b.speed > STACK.restV) return false;
     if (b.angularSpeed > STACK.restW) return false;
   }

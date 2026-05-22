@@ -187,23 +187,27 @@
       }
 
       @media (max-width: 700px) {
-        .hint {
-          top: 18px;
-          width: min(84vw, 360px);
-          text-align: center;
+      .hint {
+          top: 56px;
+          left: 18px;
+          width: calc(100vw - 36px);
+          transform: none;
+          text-align: left;
           line-height: 1.5;
         }
         .reset {
           top: 12px;
           right: 12px;
           padding: 12px;
+          min-width: 44px;
+          min-height: 44px;
         }
         .brand {
           left: 18px;
           bottom: 18px;
         }
         .timer {
-          bottom: 24px;
+          bottom: 64px;
           width: min(80vw, 260px);
         }
         .timer .bar {

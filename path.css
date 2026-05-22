@@ -13,17 +13,28 @@
 
 html,
 body {
+  height: 100%;
+  height: 100dvh;
   min-height: 100%;
+  min-height: 100dvh;
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: "Inter", system-ui, -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
   user-select: none;
   -webkit-user-select: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 body {
-  overflow-x: hidden;
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 .crumb,
@@ -123,6 +134,10 @@ body {
     linear-gradient(90deg, var(--hair) 1px, transparent 1px),
     #fff;
   background-size: 48px 48px;
+  touch-action: none;
+}
+
+.floor * {
   touch-action: none;
 }
 
@@ -240,10 +255,16 @@ body {
   }
 
   .shell {
-    min-height: auto;
+    height: 100dvh;
+    min-height: 100dvh;
     grid-template-columns: 1fr;
-    gap: 36px;
-    padding: 94px 18px 56px;
+    gap: 22px;
+    padding: 76px 18px 28px;
+    overflow: hidden;
+  }
+
+  .copy h1 {
+    font-size: clamp(38px, 11vw, 56px);
   }
 
   .copy p {
@@ -255,6 +276,8 @@ body {
   }
 
   .floor {
+    width: min(100%, 340px, calc(100dvh - 310px));
+    margin-inline: auto;
     aspect-ratio: 1 / 1;
   }
 

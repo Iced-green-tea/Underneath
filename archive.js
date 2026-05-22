@@ -54,6 +54,7 @@ function startDrag(keyEl, e){
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
+  window.addEventListener('blur', endDrag);
 }
 
 function distanceToRect(x, y, r){
@@ -87,6 +88,7 @@ function findDropTarget(x, y, color, pad = DROP_PAD){
 
 function onMove(e){
   if(!drag) return;
+  e.preventDefault();
   drag.ghost.style.left = (e.clientX - drag.offsetX) + 'px';
   drag.ghost.style.top  = (e.clientY - drag.offsetY) + 'px';
   const over = findDropTarget(e.clientX, e.clientY, drag.color);
@@ -110,6 +112,7 @@ function endDrag(e){
   window.removeEventListener('pointermove', onMove);
   window.removeEventListener('pointerup', endDrag);
   window.removeEventListener('pointercancel', endDrag);
+  window.removeEventListener('blur', endDrag);
   document.body.style.cursor = '';
 
   // animate ghost back, then remove

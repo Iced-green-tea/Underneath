@@ -22,6 +22,17 @@ const PASS_TARGET = 3;
 drawn.style.strokeDasharray = total;
 drawn.style.strokeDashoffset = total;
 
+function preventPageGesture(e) {
+  if (!complete) e.preventDefault();
+}
+
+function preventTraceScroll(e) {
+  const target = e.target;
+  if (active || target === floor || target?.closest?.(".floor")) {
+    e.preventDefault();
+  }
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -112,21 +123,32 @@ function start(e) {
   if (complete) return;
   const target = nearestLength(svgPoint(e));
   if (progress < total * 0.04 || target > progress - total * 0.04) {
+    e.preventDefault();
     active = true;
     floor.classList.add("dragging");
-    floor.setPointerCapture(e.pointerId);
+    floor.setPointerCapture?.(e.pointerId);
     move(e);
   }
 }
 
-function stop() {
+function stop(e) {
   active = false;
   floor.classList.remove("dragging");
+  if (e && Number.isFinite(e.pointerId) && floor.hasPointerCapture?.(e.pointerId)) {
+    floor.releasePointerCapture(e.pointerId);
+  }
 }
 
 floor.addEventListener("pointerdown", start);
 floor.addEventListener("pointermove", move);
 floor.addEventListener("pointerup", stop);
 floor.addEventListener("pointercancel", stop);
+window.addEventListener("pointerup", stop);
+window.addEventListener("pointercancel", stop);
+window.addEventListener("blur", stop);
+floor.addEventListener("touchstart", preventPageGesture, { passive: false });
+floor.addEventListener("touchmove", preventPageGesture, { passive: false });
+document.addEventListener("touchmove", preventTraceScroll, { passive: false });
+window.addEventListener("scroll", () => window.scrollTo(0, 0));
 
 render();
