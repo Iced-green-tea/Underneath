@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git -C \"C:\\\\Users\\\\Noah\\\\Downloads\\\\art website\" status)",
-      "Bash(git -C \"C:\\\\Users\\\\Noah\\\\Downloads\\\\art website\" remote -v)"
-    ]
-  }
-}
